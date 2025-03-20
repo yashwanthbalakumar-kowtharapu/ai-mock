@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Mock Interview</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        let currentQuestion = '';
+        let idealAnswer = '';
+
+        // Function to get a new interview question
+        async function getQuestion() {
+            try {
+                // Get interview question from ai.py
+                const response = await fetch('/generate_question', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        prompt: "Generate a professional interview question"
+                    })
+                });
+                const data = await response.json();
+                currentQuestion = data.question;
+
+                // Get ideal answer from ai.py
+                const answerResponse = await fetch('/generate_ideal_answer', {
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question: currentQuestion,
+                        prompt: `Generate an ideal answer for the interview question: ${currentQuestion}`
+                    })
+                });
+                const answerData = await answerResponse.json();
+                idealAnswer = answerData.answer;
+
+                // Display the question from ai.py
+                document.getElementById('currentQuestion').textContent = currentQuestion;
+            } catch (error) {
+                console.error('Error getting question:', error);
+            }
+        }
+
+        // Function to submit answer for analysis
+        async function submitAnswer(answer) {
+            try {
+                const response = await fetch('/analyze_answer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        candidate_answer: answer,
+                        ideal_answer: idealAnswer
+                    })
+                });
+                const feedback = await response.json();
+                return feedback;
+            } catch (error) {
+                console.error('Error analyzing answer:', error);
+            }
+        }
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0066ff, #ffffff);
+            min-height: 100vh;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+        }
+
+        .video-section {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .question-section {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+
+        #videoElement {
+            width: 100%;
+            border-radius: 10px;
+        }
+
+        .question-box {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 12px 30px;
+            border: none;
+            background: #0066ff;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #003399;
+            transform: translateY(-2px);
+        }
+
+        #timer {
+            font-size: 24px;
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="video-section">
+            <video id="videoElement" autoplay></video>
+            <div class="controls">
+                <button onclick="startInterview()">Start Interview</button>
+                <button onclick="stopInterview()">Stop Interview</button>
+            </div>
+        </div>
+
+        <div class="question-section">
+            <div id="timer">00:00</div>
+            <div class="question-box">
+                <h3>Current Question:</h3>
+                <p id="currentQuestion"></p>
+            </div>
+            <div class="controls">
+                <button onclick="nextQuestion()">Next Question</button>
+                <button onclick="window.location.href='feedback.html'">End Interview</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let stream;
+        let timer;
+        let seconds = 0;
+
+        async function startInterview() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                document.getElementById('videoElement').srcObject = stream;
+                
+                // Start camera analysis
+                fetch('/start_camera', { method: 'POST' });
+                
+                // Start timer
+                timer = setInterval(updateTimer, 1000);
+                
+                // Get first question
+                nextQuestion();
+                
+            } catch (err) {
+                console.error("Error accessing camera:", err);
+            }
+        }
+
+        function stopInterview() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                fetch('/stop_camera', { method: 'POST' });
+                clearInterval(timer);
+            }
+        }
+
+        function updateTimer() {
+            seconds++;
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            document.getElementById('timer').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function nextQuestion() {
+            fetch('/generate_question')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('currentQuestion').textContent = data.question;
+                });
+        }
+
+        // Clean up when leaving page
+        window.onbeforeunload = function() {
+            stopInterview();
+        };
+    </script>
+</body>
+</html>
